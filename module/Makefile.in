@@ -1,0 +1,21 @@
+src := @module_root@
+obj-m += phoenixfs.o
+
+KVER ?= $(shell uname -r)
+ccflags-y += @module_ccflags@
+
+phoenixfs-objs := phxfs-mem.o nvfs-pci.o nvfs-p2p.o phxfs.o
+KERNEL_SRC := /lib/modules/$(KVER)/build
+
+all: phxfs
+
+phxfs: configure
+	$(MAKE) -C $(KERNEL_SRC) M=@module_output@ modules
+configure:
+	@ @module_root@/configure $(KVER) @module_root@
+insmod:
+	sudo insmod phoenixfs.ko
+rmmod:
+	sudo rmmod phoenixfs
+clean:
+	rm -fr *.o *.ko *.mod* .*.cmd .*.d

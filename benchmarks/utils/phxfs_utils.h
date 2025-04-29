@@ -143,19 +143,6 @@ static inline void thread_prep(GDSThread *threads, int num_threads){
     }
 }
 
-static inline std::string get_xfer_mode_name(enum xfer_mode mod){
-    switch (mod) {
-        case GPUD_WITHOUT_PHONY_BUFFER:
-            return "phxfs";
-        case GPUD_WITH_PYONY_BUFFER:
-            return "gds";
-        case GPUD_WITH_CPU_BUFFER:
-            return "cpu";
-        default:
-            return "unknown";
-    }
-}
-
 static inline void infoGDSOpts(const GDSOpts& opts) {
     std::cout << "GDSOpts:" << std::endl;
     std::cout << "  mode: " << opts.mode << std::endl;
@@ -254,6 +241,7 @@ static inline bool parseOpts(int argc, char *argv[], GDSOpts &args) {
                 break;
             case 's': { // io_size                
                 args.io_size = get_size(std::string(optarg));
+                break;
             }
             case 'd': // gpu_id
                 args.gpu_id = std::stoi(optarg);
@@ -302,27 +290,6 @@ static inline std::string exec_cmd(const std::string& cmd) {
 }
 
 
-static inline bool check_kernel_module(int mode){
-
-    int nvidia_fs_installed = exec_cmd("lsmod | grep nvidia_fs").size() != 0;
-    int nfs_installed = exec_cmd("lsmod | grep phxfs").size() != 0;
-
-    switch (mode) {
-        case GPUD_WITHOUT_PHONY_BUFFER:
-            if (nfs_installed && !nvidia_fs_installed)
-                return true;
-            break;
-        case GPUD_WITH_PYONY_BUFFER:
-            if (!nfs_installed && nvidia_fs_installed)
-                return true;
-            break;
-        default:
-            return true;
-            break;
-    }
-    return false;
-}
-
 static inline void get_percentile(std::vector<uint64_t> &latency_vec){
     double p_flag[] = {0.95, 0.99, 0.999};
     std::sort(latency_vec.begin(), latency_vec.end());
@@ -332,8 +299,8 @@ static inline void get_percentile(std::vector<uint64_t> &latency_vec){
     }
 }
 
-int run_phoenix(GDSOpts opts);
 int run_gds(GDSOpts opts);
+int run_phxfs(GDSOpts opts);
 int run_posix(GDSOpts opts);
 
 #endif

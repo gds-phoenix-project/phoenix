@@ -6,6 +6,7 @@
 #include <cuda.h>
 #include <pthread.h>
 #include "phxfs_utils.h"
+#include <fcntl.h> 
 
 static void *write_thread(void *arg) {
     struct timespec io_start, io_end;

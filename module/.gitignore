@@ -1,0 +1,39 @@
+# Ignore common build artifacts
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+*.symvers
+*.order
+*.markers
+
+# Ignore output directories
+*.tmp_versions/
+*.modules.order
+*.Module.symvers
+*.tmp_*/
+
+# Ignore kernel build artifacts
+*.dwo
+*.eh_frame
+*.gdb_index
+*.debug
+*.dwarf
+
+# Ignore editor or IDE-specific files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Ignore Git files
+.DS_Store
+.git/
+*.cmd
+*.d
+.cache/
+com
+compile_commands.json
+config-host.h

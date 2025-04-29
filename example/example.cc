@@ -3,17 +3,15 @@
 #include <cstddef>
 #include <cuda_runtime.h>
 #include <fcntl.h>
-#include "phxfs.h"
-
+#include "phoenix.h"
 
 const char *file_path = "/mnt/phxfs/test.data";
 static int device_id = 0;
 static size_t io_size = 64 * (1 << 10); // 64KB
 
 int main() {
-    phxfs_xfer_addr_list_t xfer_addr_list;
     void *gpu_buffer, *target_addr;
-    int ret, i;
+    int ret;
     int file_fd;
     ssize_t result; 
 
@@ -46,7 +44,7 @@ int main() {
         return 1;
     }
 
-    ret = phxfs_unregmem(device_id, gpu_buffer, io_size);
+    ret = phxfs_deregmem(device_id, gpu_buffer, io_size);
 
     if (ret) {
         printf("phxfs unregmem failed: %d\n", ret);

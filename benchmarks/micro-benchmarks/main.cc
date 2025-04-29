@@ -10,7 +10,7 @@ int main(int argc, char **argv){
 
     switch (opts.xfer_mode) {
         case GPUD_WITHOUT_PHONY_BUFFER:
-            run_phoenix(opts);
+            run_phxfs(opts);
             break;
         case GPUD_WITH_PYONY_BUFFER:
             run_gds(opts);

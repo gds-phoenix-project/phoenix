@@ -8,17 +8,17 @@ import shlex
 from logger import Log
 
 result_path = ""
-IS_PERF = False
-FILE_PATH = ["/mnt/phxfs/test.data", "/mnt/nvme-of/test.data", "/mnt/nfs/test.data"]
+FILE_PATH = "/mnt/phxfs/test.data"
 SUBDIR = "phxfs"
 # 1M 
+MB = 1024
 io_sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024]
 threads = [1, 2, 4, 8, 16, 32, 64, 128]
-batch_sizes = [1, 2, 4, 8, 16, 32, 64, 128]
+batch_sizes = [1, 2, 4, 8, 16, 32, 64, 128, 256]
 
-read_write = ["read", "write"]
+read_write = ["read" "write"]
 file_path = os.path.dirname(os.path.realpath(__file__))
-phxfs_exec = os.path.join(file_path, "..", "benchmarks", "phxfs_bench")
+micro_exec = os.path.join(file_path, "..", "build", "bin", "microbenchmark")
 
 class test_config:
     def __init__(self):
@@ -33,26 +33,12 @@ class test_config:
         self.muti_thread = False
         self.muti_batch = False
 
-# for get cpu utilization
-PERF_CONFIG_PATH = "/mnt/phxfs/perf-6.6.0/tools/perf/perf" 
-
 pattern = r"(?:Average IO bandwidth|Average IO latency|95th percentile latency|99th percentile latency|99.9th percentile latency):\s*([\d.]+)"
 
-def get_perf_cmdline(pid):
-    return f"sudo {PERF_CONFIG_PATH} stat -p {pid} -e task-clock -I 500"
-
-def run_perf(pid, file_name):
-    file_name = os.path.join(file_path, "results/cpu", file_name)
-    with open(file_name, 'a') as f:
-        return subprocess.Popen(shlex.split(get_perf_cmdline(pid)),
-                                stdout=f,
-                                stderr=f)
-
-def get_chile_pid(pid):
-    return subprocess.check_output(shlex.split(f"pgrep -P {pid}"))
-
-def run_phxfs_bench(rw="read", io_size=4, thread=1, batch_size=1, file_path=FILE_PATH[0], async_mode=0, xfer_mode=0):
-    return f"sudo numactl -N 1 {phxfs_exec} -f {file_path} -l 10G -s {io_size}k -t {thread} -i 16 -m {rw} -a {async_mode} -d 0 -x {xfer_mode}"
+def run_bench(rw="read", io_size=4, thread=1, batch_size=16, file_path=FILE_PATH, async_mode=0, xfer_mode=0):
+    if batch_size > 64:
+        return f"{micro_exec} -f {file_path} -l 10G -s {io_size}k -t {thread} -i {batch_size} -m {rw} -a {async_mode} -d 0 -x {xfer_mode}"
+    return f"numactl -N 1 {micro_exec} -f {file_path} -l 10G -s {io_size}k -t {thread} -i 1 -m {rw} -a {async_mode} -d 0 -x {xfer_mode}"
 
 def parse_result(result):
     matches = re.findall(pattern, result)
@@ -61,30 +47,21 @@ def parse_result(result):
 
 def x_thread_y_size_z_batch(config: test_config):
     f = open(result_path, "a+")
+    print(f"result_path: {result_path}")
     io_size_iter = io_sizes if config.muti_size == True else [4]
     thread_iter = threads if config.muti_thread  == True else [1]
     batch_size_iter = batch_sizes if config.muti_batch == True else [1]
-    run_type_name = "phxfs" if config.xfer_mode == 0 else "gds"
     f.write("thread-rw-io_size-batch_size,bandwidth,latency,p95_latency,p99_latency,p999_latency\n")
     f.write(f"async_mode: {config.async_mode}, xfer_mode: {config.xfer_mode}\n")
     for rw in read_write:
         for io_size in io_size_iter:
             for thread in thread_iter:
                 for batch_size in batch_size_iter:
-                    cmdline = run_phxfs_bench(rw=rw, io_size=io_size, thread=thread, batch_size=batch_size, async_mode=config.async_mode, xfer_mode=config.xfer_mode)
+                    # subprocess.run("echo 3 | sudo tee /proc/sys/vm/drop_caches", shell=True)
+                    cmdline = run_bench(rw=rw, io_size=io_size, thread=thread, batch_size=batch_size, async_mode=config.async_mode, xfer_mode=config.xfer_mode)
                     Log.info(f"Run {cmdline}")
-                    if IS_PERF:
-                        io_test = subprocess.Popen(shlex.split(cmdline), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        time.sleep(1)
-                        pid = get_chile_pid(io_test.pid).decode()
-                        pid = get_chile_pid(pid).decode()
-                        perf = run_perf(pid, f"{run_type_name}-{config.async_mode}")
-                        perf.wait()
-                        io_test.wait()
-                        perf.kill()
-                    else:
-                        result = subprocess.check_output(cmdline, shell=True).decode()
-                        Log.info(result)
+                    result = subprocess.check_output(cmdline, shell=True).decode()
+                    Log.info(result)
                     bandwidth, latency, p95_latency, p99_latency, p999_latency = parse_result(result)
                     f.write(f"{thread}-{rw}-{io_size}-{batch_size},{bandwidth},{latency},{p95_latency},{p99_latency},{p999_latency}\n")
                     f.flush()
@@ -125,14 +102,11 @@ if __name__ == "__main__":
     config.async_mode = run_mode
     config.xfer_mode = run_batch_type
     
-    if run_mode in [0, 1]:
-        config.muti_size = True
-        x_thread_y_size_z_batch(config)
-        config.reset()
-    else:
-        config.muti_batch = True
-        x_thread_y_size_z_batch(config)
-        config.reset()
+    # change the config to test different modes
+    config.muti_size = True
+    x_thread_y_size_z_batch(config)
+    config.reset()
+
     
     
     

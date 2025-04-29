@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cuda_runtime_api.h>
 #include <cufile.h>
 #include <builtin_types.h>
 #include <pthread.h>
@@ -10,6 +11,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+
 #include "cufile_sample_utils.h"
 #include "phxfs_utils.h"
 
@@ -18,14 +20,12 @@ static void *write_thread(void *arg) {
     struct timespec io_start, io_end;
     CUfileHandle_t cf_handle = *(CUfileHandle_t*)data->handler;
     ssize_t io_size = (ssize_t)data->io_size;
-    uint64_t io_time;
     size_t written = 0;
-
+    uint64_t io_time;
 
     pr_info(__func__);
     clock_gettime(CLOCK_MONOTONIC, &data->start_time);
     while (written < data->size) {
-
         clock_gettime(CLOCK_MONOTONIC, &io_start);
         ssize_t result = cuFileWrite(cf_handle, 
         data->gpu_buffer, data->io_size, 
@@ -53,14 +53,12 @@ static void *write_thread(void *arg) {
 
 static void *read_thread(void *arg) {
     ThreadData *data = (ThreadData *)arg;
-    CUfileError_t status;
     struct timespec io_start, io_end;
     CUfileHandle_t cf_handle = *(CUfileHandle_t*)data->handler;
     ssize_t io_size = (ssize_t)data->io_size;
     size_t read_bytes = 0;
     uint64_t io_time;
-    pr_info(__func__);
-    
+
     clock_gettime(CLOCK_MONOTONIC, &data->start_time);
     while (read_bytes < data->size) {
 
@@ -68,6 +66,7 @@ static void *read_thread(void *arg) {
         ssize_t result = cuFileRead(cf_handle,
         data->gpu_buffer, data->io_size,
         data->offset + read_bytes, 0);
+        cudaStreamSynchronize(0);
         if (result != io_size) {
             printf("read_thread error, result is %lu, size is %lu\n",result, data->io_size);
             return NULL;
@@ -83,11 +82,13 @@ static void *read_thread(void *arg) {
         data->io_operations++;
         data->total_io_time += io_time;
     }
+
     clock_gettime(CLOCK_MONOTONIC, &data->end_time);
     check_cudaruntimecall((cudaFree(data->gpu_buffer)));
     
     return NULL;
 }
+
 
 void *async_thread(void *arg){
     CUfileError_t status;
@@ -106,12 +107,10 @@ void *async_thread(void *arg){
     printf("data %d", data->mode == OP_READ);
     cuFileRW = (data->mode == OP_READ) ? cuFileReadAsync : cuFileWriteAsync;
 
-    for (int i = 0; i < data->depth; i++) {
+    for (size_t i = 0; i < data->depth; i++) {
         check_cudaruntimecall(cudaStreamCreateWithFlags(&stream[i], cudaStreamNonBlocking));
         cuFileStreamRegister(stream[i], 15);
     }
-    
-    // data->gpu_buffers = new void *[data->depth];
 
     unsigned long long chunk_done_size = 0;
     unsigned long long chunk_size = data->size / data->depth;
@@ -145,9 +144,9 @@ void *async_thread(void *arg){
         }
     
         check_cudaruntimecall(cudaStreamSynchronize(stream[0]));
-        for (int i = 0; i < data->depth; i++) {
+        for (size_t i = 0; i < data->depth; i++) {
             done_bytes += io_args[i].bytes_done;
-            if (io_args[i].bytes_done != data->io_size) {
+            if (io_args[i].bytes_done != (ssize_t)data->io_size) {
                 pr_error("read_thread error, result is " << io_args[i].bytes_done << ", size is " << data->io_size);
                 return NULL;
             }
@@ -161,11 +160,9 @@ void *async_thread(void *arg){
         data->total_io_time += io_time;
     }
     clock_gettime(CLOCK_MONOTONIC, &data->end_time);
-    // cuFileBufDeregister(data->gpu_buffer);
-    for (int i = 0; i < data->depth; i++) {
+    for (size_t i = 0; i < data->depth; i++) {
         check_cudaruntimecall(cudaStreamDestroy(stream[i]));
     }
-    // check_cudaruntimecall(cudaFree(data->gpu_buffer));
     return NULL;
 }
 
@@ -201,10 +198,8 @@ static void *batch_thread(void *arg){
     }
      printf("io depth %ld\n", data->depth);
     while (done_bytes < data->size){
-        // fixme: 是否要考虑注册时间
         clock_gettime(CLOCK_MONOTONIC, &io_start);
-
-        if (chunk_done_size + data->io_size < chuck_size){
+        if ((ssize_t)(chunk_done_size + data->io_size) < chuck_size){
             for(i = 0; i < data->depth; i++) {
                 params[i].mode = CUFILE_BATCH;
                 params[i].fh = cf_handle;
@@ -289,12 +284,6 @@ int run_gds(GDSOpts opts){
         exit(EXIT_FAILURE);
     }
 
-    if (status.err != CU_FILE_SUCCESS) {
-        std::cerr << "file register error:"
-                << cuFileGetErrorString(status) << std::endl;
-        goto driver_close;
-    }
-
     memset(&cf_descr, 0, sizeof(CUfileDescr_t));
     cf_descr.handle.fd = file_fd;
     cf_descr.type = CU_FILE_HANDLE_TYPE_OPAQUE_FD;
@@ -335,7 +324,6 @@ int run_gds(GDSOpts opts){
                 return 1;
             }
         }else{
-            // cudaMemsetAsync
             unsigned long long  batch_chunk_size = data->size / data->depth;
             printf("batch_chunk_size: %llu\n", batch_chunk_size);
             data->gpu_buffers = new void*[data->depth];
@@ -343,7 +331,6 @@ int run_gds(GDSOpts opts){
                 check_cudaruntimecall(cudaMalloc(&data->gpu_buffers[j], batch_chunk_size));
                 check_cudaruntimecall(cudaMemset((void*)(data->gpu_buffers[j]), 0xab, batch_chunk_size));
                 check_cudaruntimecall(cudaStreamSynchronize(0));
-                // 这里有个问题，如果不注册，无法进行超过1M的batch IO，如果注册小粒度I/O性能会下降
                 status = cuFileBufRegister(data->gpu_buffers[j], batch_chunk_size, 0);
                 if (status.err != CU_FILE_SUCCESS) {
                     pr_error("buffer register failed:" << cuFileGetErrorString(status));
@@ -381,23 +368,28 @@ int run_gds(GDSOpts opts){
     pr_info("Average IO latency: " << average_io_latency << " ns");
     get_percentile(latency_vec);
     latency_vec.clear();
-    
+
     for (int i =0;i<opts.num_threads;i++){
         ThreadData *data = &threads[i].data;
-        if (opts.mode ==0 ){
-            cuFileBufDeregister(data->gpu_buffer);
-            check_cudaruntimecall(cudaFree(data->gpu_buffer));
+        if (opts.async ==0 ){
+            if (data->gpu_buffer != NULL){
+                // printf("free buffer %p\n", data->gpu_buffer);
+                cuFileBufDeregister(data->gpu_buffer);
+                cudaFree(data->gpu_buffer);
+                data->gpu_buffer = NULL;
+            }
         }else{
             for (size_t j =0;j<data->depth;j++){
-                cuFileBufDeregister(data->gpu_buffers[j]);
-                check_cudaruntimecall(cudaFree(data->gpu_buffers[j]));
+                if (data->gpu_buffers[j] != NULL){
+                    cuFileBufDeregister(data->gpu_buffers[j]);
+                    check_cudaruntimecall(cudaFree(data->gpu_buffers[j]));
+                }
+               
             }
         }
     }
 
 driver_close:
     cuFileHandleDeregister(cf_handle);
-    // cuFileDriverClose();
-    // close(file_fd);
     return 0;
 }

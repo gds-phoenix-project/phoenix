@@ -21,14 +21,13 @@ mlex_model_probe(){
 nvme_of_target_setup(){
     sudo mkdir /sys/kernel/config/nvmet/subsystems/${nvme_subsystem_name}
     cd /sys/kernel/config/nvmet/subsystems/${nvme_subsystem_name}
-    # 允许所有的主机访问
     echo 1 | sudo tee attr_allow_any_host
-    # 创建命名空间
     sudo mkdir namespaces/${namespaces}
-    # 指定设备
+    cd namespaces/${namespaces}
     echo -n ${nvme_device} | sudo tee device_path
     echo 1 | sudo tee enable
     mkdir /sys/kernel/config/nvmet/ports/${nvme_port}
+    cd /sys/kernel/config/nvmet/ports/${nvme_port}
     echo "${nvme_ip}" | sudo tee addr_traddr
     echo rdma | sudo tee addr_trtype
     echo ${nvme_port} | sudo tee addr_trsvcid

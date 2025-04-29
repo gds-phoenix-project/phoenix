@@ -1,0 +1,12 @@
+.cache/
+*/cufile.log
+*/*/cufile.log
+tmp/*
+*/__pycache__/*
+*/compile_commands.json
+scripts/logs/*
+scripts/results/*
+motivation/breakdown
+tools/ccan
+scripts/results*
+build/

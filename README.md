@@ -1,16 +1,17 @@
-# Phoenix: GPU Direct Storage without Phony Buffers
-This is the open-source repository for our paper: **Phoenix: GPU Direct Storage without Phony Buffers**.
+# Phoenix: A Refactored I/O Stack for GPU Direct Storage without Phony Buffers
+This is the open-source repository for our paper: **"Phoenix: A Refactored I/O Stack for GPU Direct Storage without Phony Buffers"**.This documentation explains how to build, configure and use this I/O stack.
 
 ## Directory structure
 ```python
 phonix
 |--benchmarks   # artifact evaluation files
 |--example      # example for how to use phoenix
+|--libphoenix   # user library for phoenix
 |--module       # kernel module for phoenix
 |--scripts      # test scripts
 ```
 
-## How to build
+## How to Build
 
 ### Environment
 * OS: Ubuntu 22.04.2 LTS
@@ -27,7 +28,7 @@ sudo bash cuda_12.4.0_550.54.14_linux.run
 # select nvidia-fs option and choose open driver
 ```
 
-### 2. OFED Driver
+### 2. MLNX_OFED Driver
 ```shell
 sudo ./mlnxofedinstall --with-nvmf --with-nfsrdma --enable-gds --add-kernel-support --dkms --skip-unsupported-devices-check
 sudo update-initramfs -u -k `uname -r`
@@ -37,63 +38,58 @@ sudo reboot
 #### 3.1 NVMe-of
 ```shell
 cd scripts
-bash nvme_of.sh <target|initiator> <setup|cleanup>
+sudo bash nvme_of.sh <target|initiator> <setup|cleanup>
 ```
 #### 3.2 NFS
-* server
 ```shell
-sudo apt-get install nfs-kernel-server
-mkfs.ext4 /dev/nvme0n1
-mount -o data=ordered /dev/nvme0n1 /mnt/nvme
-echo /mnt/nvme *(rw,async,insecure,no_root_squash,no_subtree_check) | sudo tee /etc/exports
-service nfs-kernel-server restart
-modprobe rpcrdma 
-echo rdma 20049 > /proc/fs/nfsd/portlist
-```
-* clinet
-```shell
-sudo apt-get install nfs-common
-modprobe rpcrdma
-mkdir -p /mnt/nfs_rdma_gds
-sudo mount -v -o proto=rdma,port=20049,vers=3 192.168.0.206:/mnt/nvme /mnt/nfs_rdma_gds
-```
-### 4. Phoenix module
-```shell
-cd module && make
-sudo make ins
-```
-## How to run
-Here, we provide the experimental scripts corresponding to the paper.
-### 0. Build benchmarks
-```shell
-cd benchmarks && make
-```
-### 1. Motivation
-```shell
-cd benchmarks
-# Table 1, 0 -> GDS
-sudo ./breakdown 0 10000 
-```
-### 2. Breakdown of Oprations
-```shell
-# Tabel 2, 1 -> Phoenix
 cd scripts
-sudo ./breakdown 1 10000 
+sudo bash nfs.sh <server|client>
+```
+### 4. Phoenix and Benchmarks
+```shell
+mkdir -p build
+cd build && cmake ../
+make -j 
+```
+Note: this will compile all the benchmarks including the kernel module
+## How to Use
+### 1. Install Kernel Module
+```shell
+cd build && sudo make insmod
+```
+Note: must run `nvidia-smi` to `modprobe` nvidia driver before install phoenix kernel module.
+### 2. Example for Using libphoenix
+We have provided a simple example to illustrate how to program using libphoenix
+```shell
+# see example/example.cc
 ```
 
+### 3. Evaluation Procedure
+We provide some scripts to execute the evaluation procedure.
+
+Note: make sure to update the paths in the scripts.
+#### 3.1 Breakdown
 ```shell
-# Fig.3
-cd scripts
-sudo bash get_op_latency.sh <0|1> 0
+cd scripts && sudo bash breakdown.sh
 ```
-### 3. Comparison with NVIDIA GDS
+#### 3.2 I/O Performance
 ```shell
 cd scripts
-# see run_batch.py for detail
-sudo python run_batch.py <0|1> <0|1|2> 0
+# see micro.py for detail
+sudo python micro.py <0|1> <0|1|2> 0
 ```
-### 4. End to End Perfmance
+#### 3.3 End-to-End Performance
 ```shell
-cd benchmarks
-sudo ./loop_performance <0|1> <1048576|2,097152|4194304> 0 # 1G 2G 4G
+cd build/
+sudo bin/end-to-end <file_path> <io_size> <mode>
+```
+#### 3.4 KVCache Loading
+```shell
+cd scripts
+sudo bash kvcache.sh
+```
+#### 3.5 Model Loading
+```shell
+cd scripts
+sudo python load_safetensors.py
 ```
