@@ -173,6 +173,7 @@ void phxfs_io_test(){
     struct timespec start, end;
     phxfs_fileid_t fid;
     int ret, file_fd, device_id;
+    uint64_t real_size = io_size;
     void *gpu_buffer;
     void *target_addr = NULL;
 
@@ -199,12 +200,16 @@ void phxfs_io_test(){
     fid.fd = file_fd;
     fid.deviceID = device_id;
 
-    check_cudaruntimecall(cudaMalloc(&gpu_buffer, io_size));
-    check_cudaruntimecall(cudaMemset(gpu_buffer, 0x00, io_size));
+    if (io_size < 64 * 1024) {
+        real_size = 64 * 1024;
+    }
+
+    check_cudaruntimecall(cudaMalloc(&gpu_buffer, real_size));
+    check_cudaruntimecall(cudaMemset(gpu_buffer, 0x00, real_size));
     check_cudaruntimecall(cudaStreamSynchronize(0));
 
     get_time(start);
-    ret = phxfs_regmem(fid.deviceID, gpu_buffer, io_size, &target_addr);
+    ret = phxfs_regmem(fid.deviceID, gpu_buffer, real_size, &target_addr);
     get_time(end);
     get_time_diff(start, end);
 
@@ -224,7 +229,7 @@ void phxfs_io_test(){
     }
 
     get_time(start);
-    ret = phxfs_deregmem(fid.deviceID, gpu_buffer, io_size);
+    ret = phxfs_deregmem(fid.deviceID, gpu_buffer, real_size);
     get_time(end);
     get_time_diff(start, end);
 
@@ -254,6 +259,7 @@ int main(int argc, char *argv[]) {
         std::cout << "Usage: " << argv[0] << " <file_path> <type> <io_size> <repeat>" << std::endl;
         return -1;
     }
+    io_size *= 1024;
     std::cout << file_path<< std::endl;
     std::cout << "io size" << io_size;
     if (type == 1)

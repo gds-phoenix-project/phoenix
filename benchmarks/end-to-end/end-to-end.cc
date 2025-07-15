@@ -139,11 +139,18 @@ int main(int argc, char* argv[]){
         printf("Usage: %s <file_path> <io_size> <mode>\n", argv[0]);
         return -1;
     }
-    int mode = atoi(argv[3]);
+    int mode;
+    std::string mode_str;
     struct IOParams params;
     params.file_path = argv[1];
     params.io_size = atoll(argv[2]);
     params.loop_idx = 0;
+    mode_str = std::string(argv[3]);
+    if (mode_str == "phxfs") {
+        mode = 0;
+    } else {
+        mode = 1;
+    }
     for (auto i = 0; i < loop_cnt; i++){
         if (mode == 0){
             loop_phxfs_large(&params);

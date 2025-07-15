@@ -10,6 +10,7 @@ find_package (Threads REQUIRED)
 find_package (CUDA 12.4 REQUIRED)
 find_package (CUDAToolkit REQUIRED)
 find_library (CUFILE_LIBRARIES cufile ${CUDA_TOOLKIT_ROOT_DIR}/lib64)
+find_library (DL_LIB dl REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBURING REQUIRED liburing)
@@ -157,7 +158,7 @@ macro (make_benchmark target binary_name files)
 
     add_dependencies (${target} libphoenix)
     target_include_directories(${target} PRIVATE ${benchmarks_utils} ${libphoenix_root}/include ${LIBURING_INCLUDE_DIRS})
-    target_link_libraries (${target} libphoenix ${CUFILE_LIBRARIES}  CUDA::cudart cuda ${LIBURING_LIBRARIES})
+    target_link_libraries (${target} libphoenix ${CUFILE_LIBRARIES}  CUDA::cudart cuda ${LIBURING_LIBRARIES} ${DL_LIB} Threads::Threads)
     set_target_properties (${target} PROPERTIES OUTPUT_NAME "${binary_name}")
 
     list (APPEND benchmark_targets "${target}")

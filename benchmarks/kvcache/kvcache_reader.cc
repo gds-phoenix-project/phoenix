@@ -423,15 +423,18 @@ PhxfsKVCacheReader::~PhxfsKVCacheReader() {
 
 int main(int argc, char** argv) {
     if (argc != 6) {
-        std::cerr << "Usage: " << argv[0] << " <type: 0=uring, 1=cufile> <gpu_id> <trace_file> <block_size>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <type: phxfs|gds> <gpu_id> <trace_file> <block_size>" << std::endl;
         return 1;
     }
 
-    int type = atoi(argv[1]);
+    int type = 0;
+    std::string type_str = std::string(argv[1]);
     int gpu_id = atoi(argv[2]);
     std::string trace_file = argv[3];
     block_size = atoll(argv[4]);
     block_file = argv[5];
+
+    type = type_str == "phxfs" ? 0 : 1;
 
     std::cout << "KVCache Reader: " << std::endl
             << "  Type: " << type << std::endl

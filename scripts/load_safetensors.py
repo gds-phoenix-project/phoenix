@@ -18,7 +18,7 @@ model_list = {"facebook": [
                 ]
 }
 
-model_prefix = "/mnt/phxfs"
+model_prefix = "/home/sc25/p5800/dataset"
 file_path = os.path.abspath(__file__)
 # get the parent directory
 parent_dir = os.path.join(os.path.dirname(file_path), "../")
@@ -53,12 +53,12 @@ for name, benchmark in benchmark_type.items():
             model_path = os.path.join(model_prefix, model, model_name)
             # subprocess.run("echo 3 | sudo tee /proc/sys/vm/drop_caches", shell=True)
             if os.path.exists(bin_path) and os.path.exists(model_path):
-                print(f"Running cmdline: {bin_path} {model_path} {benchmark} {device_id}")
-                popen = subprocess.Popen(shlex.split(f"{bin_path} {model_path} {benchmark} {device_id}"), stdout=subprocess.PIPE, text=True, env=env)
+                print(f"Running cmdline: sudo {bin_path} {model_path} {benchmark} {device_id}")
+                popen = subprocess.Popen(shlex.split(f"sudo {bin_path} {model_path} {benchmark} {device_id}"), stdout=subprocess.PIPE, text=True, env=env)
                 popen.wait()
                 output = popen.stdout.read()
                 numbers = re.findall(pattern, output)
-                result[benchmark][model_name] = {
+                result[name][model_name] = {
                     "Elapsed time": float(numbers[0]),
                     "Total size": float(numbers[1]),
                     "Throughput": float(numbers[2]),

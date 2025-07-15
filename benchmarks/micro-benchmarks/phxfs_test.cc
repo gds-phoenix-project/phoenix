@@ -374,7 +374,7 @@ int run_phxfs(GDSOpts opts){
         return 1;
     }
 
-    auto device = opts.gpu_id == 0?1:0;
+    auto device = opts.gpu_id;
 
     check_cudaruntimecall(cudaSetDevice(device));
 

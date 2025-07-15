@@ -433,7 +433,7 @@ ssize_t phxfs_read(phxfs_fileid_t fid, void *buf, off_t buf_offset, ssize_t nbyt
     for (i = 0;i < xfer_addr->nr_xfer_addrs; i++){
         target_addr = xfer_addr->x_addrs[i].target_addr;
         nbyte_per_iter = xfer_addr->x_addrs[i].nbyte;
-
+        
         ret = pread(fid.fd, target_addr, nbyte_per_iter, f_offset + nbyte_total);
         if(ret != nbyte_per_iter && ret < 0){
             fprintf(stderr, "%s\n", strerror(errno));
