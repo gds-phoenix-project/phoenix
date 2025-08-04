@@ -17,10 +17,12 @@ struct IOParams{
     ssize_t io_size;
     std::string file_path;
     std::vector<unsigned long long> latency_vec;
+    std::vector<unsigned long long> io_latency_vec;
 };
 
 static inline void loop_gds_large(struct IOParams *params){
     struct timespec start, end;
+    struct timespec io_start, io_end;
     CUfileDescr_t cf_descr;
     CUfileHandle_t cf_handle;
     CUfileError_t status;
@@ -62,26 +64,32 @@ static inline void loop_gds_large(struct IOParams *params){
         printf("cuFileBufRegister failed\n");
         exit(1);
     }
-    
+    clock_gettime(CLOCK_MONOTONIC, &io_start);
     result = cuFileRead(cf_handle, gpu_buffer, params->io_size, 
         params->loop_idx * params->io_size, 0);
     if (result != params->io_size){
         printf("cuFileRead failed\n");
         exit(1);
     }
+    clock_gettime(CLOCK_MONOTONIC, &io_end);
     
     cuFileBufDeregister(gpu_buffer);
     cuFileHandleDeregister(cf_handle);
     cuFileDriverClose();
     clock_gettime(CLOCK_MONOTONIC, &end);
 
-    params->latency_vec.push_back((end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec));
+    unsigned long long total_time = (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
+    unsigned long long io_time = (io_end.tv_sec - io_start.tv_sec) * 1000000000 + (io_end.tv_nsec - io_start.tv_nsec);
+
+    params->io_latency_vec.push_back(io_time);
+    params->latency_vec.push_back(total_time);
     check_cudaruntimecall(cudaFree(gpu_buffer));
     check_cudaruntimecall(cudaStreamSynchronize(0));
 }
 
 static inline void loop_phxfs_large(struct IOParams *params){
     struct timespec start, end;
+    struct timespec io_start, io_end;
     int file_fd;
     int device_id = 0;
     void *gpu_buffer;
@@ -114,11 +122,13 @@ static inline void loop_phxfs_large(struct IOParams *params){
         exit(1);
     }
 
+    clock_gettime(CLOCK_MONOTONIC, &io_start);
     result = phxfs_read({.fd = file_fd, .deviceID = device_id}, gpu_buffer, 0, params->io_size, params->loop_idx * params->io_size);
     if (result != params->io_size){
         printf("phxfs read failed\n");
         exit(1);
     }
+    clock_gettime(CLOCK_MONOTONIC, &io_end);
 
     ret = phxfs_deregmem(device_id, gpu_buffer, params->io_size);
     if (ret){
@@ -130,7 +140,11 @@ static inline void loop_phxfs_large(struct IOParams *params){
     clock_gettime(CLOCK_MONOTONIC, &end);
     close(file_fd);
     check_cudaruntimecall(cudaFree(gpu_buffer));
-    params->latency_vec.push_back((end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec));
+    unsigned long long total_time = (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
+    unsigned long long io_time = (io_end.tv_sec - io_start.tv_sec) * 1000000000 + (io_end.tv_nsec - io_start.tv_nsec);
+    params->io_latency_vec.push_back(io_time);
+    params->latency_vec.push_back(total_time);
+
 }
 
 static ssize_t loop_cnt = 10;
@@ -159,14 +173,18 @@ int main(int argc, char* argv[]){
         }
     }
     unsigned long long total_time = 0;
+    unsigned long long total_io_time = 0;
     for (size_t i = 0; i < params.latency_vec.size(); i++){
         total_time += params.latency_vec[i];
+        total_io_time += params.io_latency_vec[i];
     }
     total_time /= 1000.0;
+    total_io_time /= 1000.0;
     std::cout << "Test mode: " << (mode == 0 ? "PHXFS" : "GDS") << std::endl;
     std::cout << "Total IO operations: " << params.latency_vec.size() << std::endl;
     std::cout << "IO size: " << params.io_size << std::endl;
     std::cout << "Total loop count: " << loop_cnt << std::endl;
     std::cout << "Average time: " << std::fixed << (double)total_time / params.latency_vec.size() << " us" << std::endl;
+    std::cout << "Average io time: " << std::fixed << (double)total_io_time / params.io_latency_vec.size() << " us" << std::endl;
     return 0;
 }

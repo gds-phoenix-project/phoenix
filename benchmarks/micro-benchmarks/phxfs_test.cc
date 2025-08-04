@@ -30,22 +30,32 @@ static void *async_thread(void *arg) {
     size_t internal_bytes = 0;
     ssize_t io_size = (ssize_t)data->io_size;
     unsigned nr_completed = 0;
-    unsigned long long chuck_size = data->size / data->depth;
-    unsigned long long chuck_done_size = 0;
+    unsigned long long chunk_size = data->size / data->depth;
+    unsigned long long chunk_done_size = 0;
 
     int ret;
     int op = data->mode == 0 ? IORING_OP_READ : IORING_OP_WRITE;
 
+    int repeated = data->size / data->io_size / data->depth;
+    if (repeated < 30){
+        repeated = 30 / (repeated) + 1;
+        printf("repeated is %d\n", repeated);
+    } else {
+        repeated = 1;
+    }
+
     pr_info(__func__);
     
-    while (done_bytes < data->size) {
+    while (repeated-- > 0) {
+        done_bytes = chunk_done_size = 0;
+        while (done_bytes < data->size) {
         
+        if (chunk_done_size + (ssize_t)data->io_size  > chunk_size){
+            pr_debug("out of range");
+            break;
+        }
         clock_gettime(CLOCK_MONOTONIC, &io_start);
         for (i = 0 ; i < data->depth; i++){
-            if (chuck_done_size + (ssize_t)data->io_size  > chuck_size){
-                pr_debug("out of range");
-                break;
-            }
             sqe = io_uring_get_sqe(data->ring);
             if (!sqe) {
                 pr_error("io_uring_get_sqe failed");
@@ -53,7 +63,7 @@ static void *async_thread(void *arg) {
             }
             // 针对GPU地址进行转换
             xfer_addr = phxfs_do_xfer_addr(fid.deviceID, data->gpu_buffer,
-                                        chuck_done_size + i * chuck_size,
+                                        chunk_done_size + i * data->io_size,
                                         data->io_size);
             if (xfer_addr == NULL){
                 pr_error("phxfs_xfer_addr error");
@@ -86,7 +96,7 @@ static void *async_thread(void *arg) {
             io_uring_cqe_seen(data->ring, cqe);
             nr_completed ++;
         }
-        chuck_done_size += data->io_size;
+        chunk_done_size += data->io_size;
         nr_completed = 0;
         clock_gettime(CLOCK_MONOTONIC, &io_end);
         done_bytes += data->io_size * pending;
@@ -94,7 +104,9 @@ static void *async_thread(void *arg) {
         data->io_operations ++;
         data->total_io_time += io_time;
         data->latency_vec.push_back(io_time);
+        }
     }
+    
     return NULL;
 }
 
@@ -112,6 +124,14 @@ static void *async_thread_stream(void *arg) {
     unsigned long long chunk_size = data->size / data->depth;
     unsigned long long chunk_done_size = 0;
     io_args_s *io_args = (io_args_s *)malloc( data->depth * sizeof(io_args_s));
+
+    int repeated = data->size / data->io_size / data->depth;
+    if (repeated < 30){
+        repeated = 30 / (repeated) + 1;
+        printf("repeated is %d\n", repeated);
+    } else {
+        repeated = 1;
+    }
     
     cudaStream_t stream;
     check_cudaruntimecall(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
@@ -126,52 +146,56 @@ static void *async_thread_stream(void *arg) {
 
     pr_info(__func__);
     
-    while (done_bytes < data->size) {
-        
-        clock_gettime(CLOCK_MONOTONIC, &io_start);
-        
-        if (chunk_done_size + (ssize_t)data->io_size  > chunk_size){
-            pr_debug("out of range");
-            break;
-        }
-        clock_gettime(CLOCK_MONOTONIC, &io_start);
-        for (size_t i = 0; i < data->depth; i++) {
-            io_args[i].devPtr = (void *)((uintptr_t)data->gpu_buffer + done_bytes + i * data->io_size);
-            io_args[i].io_size = data->io_size;
-            io_args[i].f_offset = data->offset + done_bytes + i * data->io_size;
-            io_args[i].buf_off =  chunk_done_size;
-            io_args[i].bytes_done = 0;
-        }
-
-        for (size_t i = 0; i < data->depth; i++) {
-            status = phxfsRW(fid, io_args[i].devPtr, io_args[i].io_size,
-                            io_args[i].f_offset,
-                            &io_args[i].bytes_done, stream);
-            if (status != cudaSuccess) {
-                pr_info("bufPtr: " << io_args[i].devPtr << " io_size: " << io_args[i].io_size << " f_offset: " << io_args[i].f_offset << " buf_off: " << io_args[i].buf_off);
-                return NULL;
+    while (repeated -- > 0){
+        done_bytes = 0;
+        while (done_bytes < data->size) {
+            clock_gettime(CLOCK_MONOTONIC, &io_start);
+            
+            if (chunk_done_size + (ssize_t)data->io_size  > chunk_size){
+                pr_debug("out of range");
+                break;
             }
-        }
-        
+            clock_gettime(CLOCK_MONOTONIC, &io_start);
+            for (size_t i = 0; i < data->depth; i++) {
+                io_args[i].devPtr = (void *)((uintptr_t)data->gpu_buffer + done_bytes + i * data->io_size);
+                io_args[i].io_size = data->io_size;
+                io_args[i].f_offset = data->offset + done_bytes + i * data->io_size;
+                io_args[i].buf_off =  chunk_done_size;
+                io_args[i].bytes_done = 0;
+            }
 
-        check_cudaruntimecall(cudaStreamSynchronize(stream));
-        for (size_t i = 0; i < data->depth; i++) {
-            done_bytes += io_args[i].bytes_done;
-            if (io_args[i].bytes_done != (ssize_t)data->io_size) {
-                for (size_t j = 0; j < data->depth; j++) {
-                    pr_info("bufPtr: " << io_args[j].devPtr << " io_size: " << io_args[j].io_size << " f_offset: " << io_args[j].f_offset << " buf_off: " << io_args[j].buf_off);
+            for (size_t i = 0; i < data->depth; i++) {
+                status = phxfsRW(fid, io_args[i].devPtr, io_args[i].io_size,
+                                io_args[i].f_offset,
+                                &io_args[i].bytes_done, stream);
+                if (status != cudaSuccess) {
+                    pr_info("bufPtr: " << io_args[i].devPtr << " io_size: " << io_args[i].io_size << " f_offset: " << io_args[i].f_offset << " buf_off: " << io_args[i].buf_off);
+                    pr_info("cuda err " << status);
+                    return NULL;
                 }
-                return NULL;
             }
+            
+
+            check_cudaruntimecall(cudaStreamSynchronize(stream));
+            for (size_t i = 0; i < data->depth; i++) {
+                done_bytes += io_args[i].bytes_done;
+                if (io_args[i].bytes_done != (ssize_t)data->io_size) {
+                    for (size_t j = 0; j < data->depth; j++) {
+                        pr_info("bufPtr: " << io_args[j].devPtr << " io_size: " << io_args[j].io_size << " f_offset: " << io_args[j].f_offset << " buf_off: " << io_args[j].buf_off);
+                    }
+                    return NULL;
+                }
+            }
+            
+            clock_gettime(CLOCK_MONOTONIC, &io_end);
+            chunk_done_size += data->io_size;
+            io_time = (io_end.tv_sec - io_start.tv_sec) * 1000000000LL + (io_end.tv_nsec - io_start.tv_nsec);
+            data->io_operations ++;
+            data->total_io_time += io_time;
+            data->latency_vec.push_back(io_time);
         }
-        
-        clock_gettime(CLOCK_MONOTONIC, &io_end);
-        chunk_done_size += data->io_size;
-        io_time = (io_end.tv_sec - io_start.tv_sec) * 1000000000LL + (io_end.tv_nsec - io_start.tv_nsec);
-        data->io_operations ++;
-        data->total_io_time += io_time;
-        data->latency_vec.push_back(io_time);
     }
+
     return NULL;
 }
 
@@ -359,10 +383,11 @@ int run_phxfs(GDSOpts opts){
     unsigned long long prog_time = 0;
     int file_fd, ret;
 
-    static void *(*rw_funcs[3][2])(void *arg) = {
+    static void *(*rw_funcs[4][2])(void *arg) = {
         {sync_read_thread, sync_write_thread}, 
         {async_thread, async_thread}, 
-        {batch_thread, batch_thread}};
+        {batch_thread, batch_thread},
+        {async_thread_stream, async_thread_stream}};
 
     threads = new GDSThread[opts.num_threads];
     thread_prep(threads, opts.num_threads);

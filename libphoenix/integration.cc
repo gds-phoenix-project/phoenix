@@ -22,15 +22,15 @@ struct phxfs_data{
 
 void CUDART_CB phxfs_callback(void *user_data){
     auto* data = static_cast<phxfs_data*>(user_data);
-    data->bytes_done = 0;
+    *data->bytes_done = 0;
     ssize_t file_offset = data->file_offset;
     for (uint32_t i = 0; i < data->xfer_addr->nr_xfer_addrs; i++) {
         auto xfer_addr = data->xfer_addr->x_addrs[i];
         if (data->op == PHXFS_OP_READ) {
-            data->bytes_done += pread(data->fd, xfer_addr.target_addr, 
+            *data->bytes_done += pread(data->fd, xfer_addr.target_addr, 
                                 xfer_addr.nbyte, file_offset);
         } else {
-            data->bytes_done += pwrite(data->fd, xfer_addr.target_addr, 
+            *data->bytes_done += pwrite(data->fd, xfer_addr.target_addr, 
                                      xfer_addr.nbyte, file_offset);
         }
         file_offset += xfer_addr.nbyte;

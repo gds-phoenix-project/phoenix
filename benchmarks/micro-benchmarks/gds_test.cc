@@ -116,49 +116,60 @@ void *async_thread(void *arg){
     unsigned long long chunk_size = data->size / data->depth;
     pr_info(__func__);
 
-    clock_gettime(CLOCK_MONOTONIC, &data->start_time);
-    while (done_bytes < data->size) {
-        
-        if (chunk_done_size + data->io_size > chunk_size) {
-            break;
-        }
-        clock_gettime(CLOCK_MONOTONIC, &io_start);
-        for (size_t i = 0; i < data->depth; i++) {
-            io_args[i].devPtr = data->gpu_buffers[i];
-            io_args[i].io_size = data->io_size;
-            io_args[i].f_offset = data->offset + done_bytes + i * data->io_size;
-            io_args[i].buf_off =  chunk_done_size;
-            io_args[i].bytes_done = 0;
-        }
-        for (size_t i = 0; i < data->depth; i++) {
-            status = cuFileRW(cf_handle, io_args[i].devPtr, &io_args[i].io_size,
-                            &io_args[i].f_offset, &io_args[i].buf_off,
-                            &io_args[i].bytes_done, stream[0]);
-            if (status.err != CU_FILE_SUCCESS) {
-                pr_info("data size: " << data->size << " read_bytes: " << done_bytes << " iter_nbytes: " << batch_iter_nbytes);
-                pr_info("bufPtr: " << io_args[i].devPtr << " io_size: " << io_args[i].io_size << " f_offset: " << io_args[i].f_offset << " buf_off: " << io_args[i].buf_off);
-                std::cerr << "read async failed:"
-                        << cuFileGetErrorString(status) << std::endl;
-                return NULL;
-            }
-        }
-    
-        check_cudaruntimecall(cudaStreamSynchronize(stream[0]));
-        for (size_t i = 0; i < data->depth; i++) {
-            done_bytes += io_args[i].bytes_done;
-            if (io_args[i].bytes_done != (ssize_t)data->io_size) {
-                pr_error("read_thread error, result is " << io_args[i].bytes_done << ", size is " << data->io_size);
-                return NULL;
-            }
-        }
-        // check_cudaruntimecall(fn)
-        clock_gettime(CLOCK_MONOTONIC, &io_end);
-        chunk_done_size += data->io_size;
-        data->io_operations++;
-        unsigned long long io_time = (io_end.tv_sec - io_start.tv_sec) * 1000000000LL + (io_end.tv_nsec - io_start.tv_nsec);
-        data->latency_vec.push_back(io_time);
-        data->total_io_time += io_time;
+    int repeated = data->size / data->io_size / data->depth;
+    if (repeated < 30){
+        repeated = 30 / (repeated) + 1;
+        printf("repeated is %d\n", repeated);
+    } else {
+        repeated = 1;
     }
+
+    while (repeated -- > 0) {
+        done_bytes = chunk_done_size = 0;
+        while (done_bytes < data->size) {
+            if (chunk_done_size + data->io_size > chunk_size) {
+                break;
+            }
+            clock_gettime(CLOCK_MONOTONIC, &io_start);
+            for (size_t i = 0; i < data->depth; i++) {
+                io_args[i].devPtr = data->gpu_buffers[i];
+                io_args[i].io_size = data->io_size;
+                io_args[i].f_offset = data->offset + done_bytes + i * data->io_size;
+                io_args[i].buf_off =  chunk_done_size;
+                io_args[i].bytes_done = 0;
+            }
+            for (size_t i = 0; i < data->depth; i++) {
+                status = cuFileRW(cf_handle, io_args[i].devPtr, &io_args[i].io_size,
+                                &io_args[i].f_offset, &io_args[i].buf_off,
+                                &io_args[i].bytes_done, stream[0]);
+                if (status.err != CU_FILE_SUCCESS) {
+                    pr_info("data size: " << data->size << " read_bytes: " << done_bytes << " iter_nbytes: " << batch_iter_nbytes);
+                    pr_info("bufPtr: " << io_args[i].devPtr << " io_size: " << io_args[i].io_size << " f_offset: " << io_args[i].f_offset << " buf_off: " << io_args[i].buf_off);
+                    std::cerr << "read async failed:"
+                            << cuFileGetErrorString(status) << std::endl;
+                    return NULL;
+                }
+            }
+        
+            check_cudaruntimecall(cudaStreamSynchronize(stream[0]));
+            for (size_t i = 0; i < data->depth; i++) {
+                done_bytes += io_args[i].bytes_done;
+                if (io_args[i].bytes_done != (ssize_t)data->io_size) {
+                    pr_error("read_thread error, result is " << io_args[i].bytes_done << ", size is " << data->io_size);
+                    return NULL;
+                }
+            }
+            // check_cudaruntimecall(fn)
+            clock_gettime(CLOCK_MONOTONIC, &io_end);
+            chunk_done_size += data->io_size;
+            data->io_operations++;
+            unsigned long long io_time = (io_end.tv_sec - io_start.tv_sec) * 1000000000LL + (io_end.tv_nsec - io_start.tv_nsec);
+            data->latency_vec.push_back(io_time);
+            data->total_io_time += io_time;
+            }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &data->start_time);
+
     clock_gettime(CLOCK_MONOTONIC, &data->end_time);
     for (size_t i = 0; i < data->depth; i++) {
         check_cudaruntimecall(cudaStreamDestroy(stream[i]));
