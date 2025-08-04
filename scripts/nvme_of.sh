@@ -2,10 +2,10 @@
 
 nvme_subsystem_name="nvme-subsystem-name"
 namespaces=10
-nvme_device="/dev/nvme1n1"
+nvme_device="/dev/nvme2n1"
 nvme_port=1
-nvme_ip="192.168.0.206"
-nvme_port=4420
+nvme_ip="192.168.0.219"
+nvme_ip_port=4420
 
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <target|initiator> <setup|cleanup>"
@@ -30,14 +30,14 @@ nvme_of_target_setup(){
     cd /sys/kernel/config/nvmet/ports/${nvme_port}
     echo "${nvme_ip}" | sudo tee addr_traddr
     echo rdma | sudo tee addr_trtype
-    echo ${nvme_port} | sudo tee addr_trsvcid
+    echo ${nvme_ip_port} | sudo tee addr_trsvcid
     echo ipv4 | sudo tee addr_adrfam
     sudo ln -s /sys/kernel/config/nvmet/subsystems/${nvme_subsystem_name} /sys/kernel/config/nvmet/ports/1/subsystems/${nvme_subsystem_name}
 }
 
 nvme_of_initiator_setup(){
-    sudo nvme discover -t rdma -q ${nvme_subsystem_name} -a ${nvme_ip} -s ${nvme_port}
-    sudo nvme connect -t rdma -q ${nvme_subsystem_name} -n ${nvme_subsystem_name}  -a ${nvme_ip} -s ${nvme_port}
+    sudo nvme discover -t rdma -q ${nvme_subsystem_name} -a ${nvme_ip} -s ${nvme_ip_port}
+    sudo nvme connect -t rdma -q ${nvme_subsystem_name} -n ${nvme_subsystem_name}  -a ${nvme_ip} -s ${nvme_ip_port}
 }
 
 nvme_of_initiator_cleanup(){
@@ -45,7 +45,15 @@ nvme_of_initiator_cleanup(){
 }
 
 nvme_of_target_cleanup(){
-    sudo rmdir /sys/kernel/config/nvmet/ports/${nvme_port}/subsystems/${nvme_subsystem_name}
+    sudo unlink /sys/kernel/config/nvmet/ports/1/subsystems/${nvme_subsystem_name}
+    cd /sys/kernel/config/nvmet/subsystems/${nvme_subsystem_name}/namespaces/${namespaces}
+    echo 0 | sudo tee enable
+    cd /sys/kernel/config/nvmet/subsystems/${nvme_subsystem_name}
+    sudo rmdir namespaces/${namespaces}
+    cd /sys/kernel/config/nvmet/subsystems/
+    sudo rmdir ${nvme_subsystem_name} 
+
+    sudo rmdir /sys/kernel/config/nvmet/ports/${nvme_port}
     sudo rmdir /sys/kernel/config/nvmet/subsystems/${nvme_subsystem_name}
 }
 
