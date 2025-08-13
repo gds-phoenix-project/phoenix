@@ -2,6 +2,7 @@ import os
 import subprocess
 import re
 import pandas as pd
+import argparse
 
 from logger import Log
 
@@ -10,6 +11,8 @@ build_root = os.path.join(project_root, "build")
 all_size = [4 ,16 ,64 ,256 ,1024, 4096, 16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024]
 all_thread = [1, 2, 4, 8, 16, 32, 64, 128]
 all_batch = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+
+only_get_command = False
 
 def exist_path(path):
     return os.path.exists(path)
@@ -21,6 +24,8 @@ def run_cmd(bin, args: list):
     args = [str(x) for x in args]
     cmdline = "sudo {} {}".format(bin, " ".join(args))
     Log.info(cmdline)
+    if only_get_command:
+        return ""
     popen = subprocess.check_output(cmdline, shell=True)
     return popen.decode()
 
@@ -33,6 +38,9 @@ def run_fig3():
     for t in [0, 1]:
         for bs in block_size:
             result[t].append(run_cmd(bin_path, [file_path, t, bs, 10]))
+    
+    if only_get_command:
+        return
     
     def parse(data, pattern):
         result = []
@@ -69,6 +77,9 @@ def run_table3():
     for t in [0, 1]:
         for bs in block_size:
             result[t].append(run_cmd(bin_path, [file_path, t, bs, 10]))
+
+    if only_get_command:
+        return
 
     def parse(data, pattern):
         result = []
@@ -112,6 +123,8 @@ def run_fig4():
     for t in [0, 1]: 
         for bs in block_size:
             data = run_io(func_args(t, bs * 1024))
+            if only_get_command:
+                continue
             data = data.split("\n")[-6:-1]
             pattern = r":\s*(\d+?.\d*)\s*"
             tmp = []
@@ -122,6 +135,8 @@ def run_fig4():
                 else:
                     print("not match")
             result[t].loc[len(result[t])] = tmp
+    if only_get_command:
+        return
     
     final_result = pd.concat(result, 
     axis=1,
@@ -146,6 +161,8 @@ def run_fig5():
     for t in [0, 1]: 
         for thread in threads:
             data = run_io(func_args(t, thread))
+            if only_get_command:
+                continue
             data = data.split("\n")[11:-1]
             pattern = r":\s*(\d+?.\d*)\s*"
             tmp = []
@@ -156,6 +173,9 @@ def run_fig5():
                 else:
                     print("not match")
             result[t].loc[len(result[t])] = tmp
+    
+    if only_get_command:
+        return
     
     final_result = pd.concat(result, 
     axis=1,
@@ -183,6 +203,8 @@ def run_fig6():
                 data = run_io(func_args(0, bs * 1024, 3))
             else:
                 data = run_io(func_args(t, bs * 1024, async_mode))
+            if only_get_command:
+                continue
             data = data.split("\n")[-6:-1]
             pattern = r":\s*(\d+?.\d*)\s*"
             tmp = []
@@ -194,6 +216,8 @@ def run_fig6():
                     print("not match")
             result[t].loc[len(result[t])] = tmp
     
+    if only_get_command:
+        return
 
     final_result = pd.concat(result, 
     axis=1,
@@ -217,6 +241,8 @@ def run_fig7():
     for t in [0, 1]: 
         for batch in batch_size:
             data = run_io(func_args(t, batch))
+            if only_get_command:
+                continue
             data = data.split("\n")[-6:-1]
             pattern = r":\s*(\d+?.\d*)\s*"
             print(data)
@@ -229,6 +255,8 @@ def run_fig7():
                     print("not match")
             result[t].loc[len(result[t])] = tmp
     
+    if only_get_command:
+        return
 
     final_result = pd.concat(result, 
     axis=1,
@@ -249,6 +277,8 @@ def run_fig8():
         GB = 1024 * 1024 * 1024
         for bs in [GB, 2 * GB, 4 * GB]:
             data = run_cmd(bin_path, [file_path, bs, "phxfs" if t == 0 else "gds"])
+            if only_get_command:
+                continue
             data = data.split("\n")[-3:-1]
             tmp = []
             for d in data:
@@ -258,6 +288,9 @@ def run_fig8():
                 else:
                     print("not match")
             result[t].loc[len(result[t])] = tmp
+    if only_get_command:
+        return
+    
     final_result = pd.concat(result, 
     axis=1,
     keys=["Phoenix", "NVIDIA GDS"])
@@ -283,6 +316,8 @@ def run_fig10():
     for t in [0, 1]: 
         for thread in threads:
             data = run_io(func_args(t, thread))
+            if only_get_command:
+                continue
             data = data.split("\n")[11:-1]
             pattern = r":\s*(\d+?.\d*)\s*"
             tmp = []
@@ -294,6 +329,9 @@ def run_fig10():
                     print("not match")
             result[t].loc[len(result[t])] = tmp
     
+    if only_get_command:
+        return
+
     final_result = pd.concat(result, 
     axis=1,
     keys=["Phoenix", "NVIDIA GDS"])
@@ -317,6 +355,8 @@ def run_fig11():
             trace_result = []
             for b in block_size:
                 data = run_cmd(bin_path, ["phxfs" if t == 0 else "gds", 0, os.path.join(traces_path, trace), b, file_path])
+                if only_get_command:
+                    continue
                 pattern = r"IO Bandwidth:\s*(\d+?.\d*)\s*GB/s"
                 m = re.search(pattern, data)
                 if m:
@@ -325,6 +365,8 @@ def run_fig11():
                     Log.error("not match")
                     exit(-1)
             result[t][trace] = trace_result
+    if only_get_command:
+        return
     final_result = pd.concat(result, 
     axis=1,
     keys=["Phoenix", "NVIDIA GDS"])
@@ -363,12 +405,25 @@ def run_fig12():
                 # subprocess.run("echo 3 | sudo tee /proc/sys/vm/drop_caches", shell=True)
                 if os.path.exists(bin_path) and os.path.exists(model_path):
                     data = run_cmd(bin_path, [model_path, benchmark, 0])
+                    if only_get_command:
+                        continue
                     numbers = re.findall(pattern, data)
                     cur_result.append(numbers[0])
                 else:
                     print(f"Binary {bin_path} or model path {model_path} does not exist")
         result[name] = cur_result
+    if only_get_command:
+        return
     result.to_excel("results/fig12.xlsx", index=True, merge_cells=True)
+
+def parser():
+    parser = argparse.ArgumentParser()
+    artifacts = [f"fig{i}" for i in range(3, 13)]
+    artifacts.append("table3")
+    artifacts.append("all")
+    parser.add_argument("-g", "--get_commands", action="store_true", help="get the artifact command")
+    parser.add_argument("-a", "--artifact", help="Artifact to reproduce", required=True, choices=artifacts)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
@@ -376,7 +431,13 @@ if __name__ == "__main__":
     if not os.path.exists(result_dir):
         os.mkdir(result_dir)
 
-    run_table3()
-
-    for i in range(3, 13):
-        eval("run_fig{}()".format(i))
+    args = parser()
+    if args.get_commands:
+        only_get_command = True
+    
+    if args.artifact == "all":
+        run_table3()
+        for i in range(3, 13):
+            eval("run_fig{}()".format(i))
+    else:
+        eval(f"run_{args.artifact}()")
