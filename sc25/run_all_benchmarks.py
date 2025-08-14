@@ -11,6 +11,9 @@ build_root = os.path.join(project_root, "build")
 all_size = [4 ,16 ,64 ,256 ,1024, 4096, 16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024]
 all_thread = [1, 2, 4, 8, 16, 32, 64, 128]
 all_batch = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
+nvmeof_file_path = "/home/sc25/nvme-of/kvcache_tensor.bin"
+model_dir = "/home/sc25/p5800/dataset"
 
 only_get_command = False
 
@@ -32,7 +35,6 @@ def run_cmd(bin, args: list):
 def run_fig3():
     block_size = [4 ,8 ,16 ,32 ,64 ,128 ,256 ,512 ,1024 ,2048 ,4096]
     bin_path = os.path.join(build_root, "bin/breakdown")
-    file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
 
     result = [[], []]
     for t in [0, 1]:
@@ -71,7 +73,7 @@ def run_fig3():
 def run_table3():
     block_size = [64]
     bin_path = os.path.join(build_root, "bin/breakdown")
-    file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
+    
 
     result = [[], []]
     for t in [0, 1]:
@@ -116,7 +118,7 @@ def run_fig4():
     thread = 1
     rw = "read"
     async_mode = 0
-    file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
+    
     io_depth = 1
 
     func_args = lambda xfer_mode, bs: [f"-f {file_path}", "-l 10G", f"-s {bs}", f"-t {thread}", f"-i {io_depth}", f"-m {rw}", f"-a {async_mode}", f"-x {xfer_mode}"]
@@ -154,7 +156,7 @@ def run_fig5():
     threads = all_thread
     rw = "read"
     async_mode = 0
-    file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
+    
     io_depth = 1
 
     func_args = lambda xfer_mode, thread: [f"-f {file_path}", "-l 10G", f"-s {block_size}", f"-t {thread}", f"-i {io_depth}", f"-m {rw}", f"-a {async_mode}", f"-x {xfer_mode}"]
@@ -193,7 +195,7 @@ def run_fig6():
     thread = 1
     rw = "read"
     async_mode = 1
-    file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
+    
     io_depth = 16
 
     func_args = lambda xfer_mode, bs, mode: [f"-f {file_path}", f"-l 20G", f"-s {bs}", f"-t {thread}", f"-i {io_depth}", f"-m {rw}", f"-a {mode}", f"-x {xfer_mode}"]
@@ -233,7 +235,7 @@ def run_fig7():
     thread = 1
     rw = "read"
     async_mode = 2
-    file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
+    
 
     batch_size = all_batch
 
@@ -268,7 +270,6 @@ def run_fig7():
 def run_fig8():
     Log.info("Small size result")
     bin_path = os.path.join(build_root, "bin/end-to-end")
-    file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
 
     result = [pd.DataFrame(columns=["end to end", "io"]), pd.DataFrame(columns=["end to end", "io"])]
     pattern = r"\s*(\d+?.\d*)\s*us"
@@ -309,10 +310,9 @@ def run_fig10():
     threads = all_thread
     rw = "read"
     async_mode = 0
-    file_path = "/home/sc25/nvme-of/kvcache_tensor.bin"
     io_depth = 1
 
-    func_args = lambda xfer_mode, thread: [f"-f {file_path}", "-l 10G", f"-s {block_size}", f"-t {thread}", f"-i {io_depth}", f"-m {rw}", f"-a {async_mode}", f"-x {xfer_mode}"]
+    func_args = lambda xfer_mode, thread: [f"-f {nvmeof_file_path}", "-l 10G", f"-s {block_size}", f"-t {thread}", f"-i {io_depth}", f"-m {rw}", f"-a {async_mode}", f"-x {xfer_mode}"]
     for t in [0, 1]: 
         for thread in threads:
             data = run_io(func_args(t, thread))
@@ -344,7 +344,7 @@ def run_fig10():
 def run_fig11():
     trace_text = ["paper_assit.txt", "gsm100.txt", "quality.txt", "sharegpt-sample-200.txt"]
     bin_path = os.path.join(build_root, "bin/kvcache")
-    file_path = "/home/sc25/p5800/dataset/kvcache_tensor.bin"
+    
     traces_path = os.path.join(project_root, "benchmarks/kvcache/traces")
     
     result = [pd.DataFrame(columns=trace_text), pd.DataFrame(columns=trace_text)]
@@ -393,7 +393,6 @@ def run_fig12():
     }
     pattern = r'(?<=Elapsed time: )\d+\.\d+|(?<=Total size: )\d+\.\d+|(?<=Throughput: )\d+\.\d+'
     bin_path = os.path.join(build_root, "bin", "safetensor")
-    model_prefix = "/home/sc25/p5800/dataset"
 
     result = pd.DataFrame()
 
@@ -401,7 +400,7 @@ def run_fig12():
         cur_result = []
         for model in model_list:
             for model_name in model_list[model]:
-                model_path = os.path.join(model_prefix, model, model_name)
+                model_path = os.path.join(model_dir, model, model_name)
                 # subprocess.run("echo 3 | sudo tee /proc/sys/vm/drop_caches", shell=True)
                 if os.path.exists(bin_path) and os.path.exists(model_path):
                     data = run_cmd(bin_path, [model_path, benchmark, 0])
