@@ -1,5 +1,5 @@
 # Phoenix: A Refactored I/O Stack for GPU Direct Storage without Phony Buffers
-This is the open-source repository for our paper: **"Phoenix: A Refactored I/O Stack for GPU Direct Storage without Phony Buffers"**, which has been accepted for [SC'25](https://sc25.supercomputing.org/). This documentation explains how to build, configure and use this I/O stack.
+This is the open-source repository for our paper: **"Phoenix: A Refactored I/O Stack for GPU Direct Storage without Phony Buffers"**, which has been accepted for [SC'25](https://doi.org/10.1145/3712285.3759862). This documentation explains how to build, configure and use this I/O stack.
 
 ## Directory structure
 ```python
