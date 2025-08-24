@@ -68,27 +68,39 @@ We have provided a simple example to illustrate how to program using libphoenix
 We provide some scripts to execute the evaluation procedure.
 
 Note: make sure to update the paths in the scripts.
-#### 3.1 Breakdown
+### 3.1 Faster Reproduction. 
+We have integrated all experiment scripts and provided a Python script. 
+Users can run the corresponding experiment by specifying the artifact parameter. This script will also print all the corresponding execution commands.
+Before running this Python script, users need to set the variables `file_path`, `nvmeof_file_path`, and `model_dir` to the paths specific to users’ own environment. 
+All results will be stored in the `phoenix/sc25/results` directory
+
+```shell
+cd phoenix/sc25
+# `all` will run table3 and fig 3 ~ 12
+sudo python run_all_benchmarks.py --artifact all
+```
+In addition, we also provide individual scripts for each experiment as follows:
+#### 3.2 Breakdown
 ```shell
 cd scripts && sudo bash breakdown.sh
 ```
-#### 3.2 I/O Performance
+#### 3.3 I/O Performance
 ```shell
 cd scripts
 # see micro.py for detail
 sudo python micro.py <0|1> <0|1|2> 0
 ```
-#### 3.3 End-to-End Performance
+#### 3.4 End-to-End Performance
 ```shell
 cd build/
 sudo bin/end-to-end <file_path> <io_size> <mode>
 ```
-#### 3.4 KVCache Loading
+#### 3.5 KVCache Loading
 ```shell
 cd scripts
 sudo bash kvcache.sh
 ```
-#### 3.5 Model Loading
+#### 3.6 Model Loading
 ```shell
 cd scripts
 sudo python load_safetensors.py
